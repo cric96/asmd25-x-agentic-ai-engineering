@@ -324,6 +324,7 @@ trait MathAgent:
 ```
 
 
+
 == From Text Generation to Action
 - How does the model's language output become an actual operation in the world?
 - #keyline[The orchestration layer converts #underline[language] into execution and execution back into #underline[context]]
@@ -351,19 +352,27 @@ trait MathAgent:
 - *Function calling* is the usual interface: the model returns a typed function name with validated arguments instead of fragile free text.
 - Frameworks such as _LangChain4j_ help normalize provider-specific tool-calling APIs at the application level.
 
-== LangChain4j: Conceptual Tool-Use Flow
+== Tool Example - User, LLM and Tools Interaction
 
-- #keyline[The framework mediates between application capabilities and provider-specific model interfaces]
-#v(0.25em)
-- *Developer side:* the application exposes a set of callable capabilities
-- *Framework side:* those capabilities are presented to the model in a provider-compatible form
-- *Model side:* the model decides whether a tool is needed and emits a structured request
-- *Runtime side:* the selected tool is executed and the result is captured
-- *Conversation side:* the result is reintroduced into the interaction so reasoning can continue
-#v(0.25em)
-- #highlight[Takeaway:] the framework coordinates the loop between model, tool, and application logic
-- _Editorial hint:_ TODO sequence diagram of model request, runtime execution, tool result, and final answer
 
+#image("figures/tool-llm-sequence.png", width: 100%)
+
+== Tool Example - Multiple Tools at once
+#image("figures/tool-chaining.png", width: 100%)
+
+== Model Context Protocol (MCP)
+
+- #keyline[The Problem:] traditional integrations (files, Slack, GitHub) require custom point-to-point glue code, leading to fragmentation and duplicate effort.
+- #keyline[The Solution:] a standardized open protocol to securely connect AI models to any data source or tool.
+  - _Build once, use everywhere:_ any compliant client can connect to any compliant tool server.
+#v(0.25em)
+- #highlight[Client-Server Architecture:]
+  - *MCP Client:* your AI application (e.g., LangChain4j) requesting tool execution.
+  - *MCP Server:* standalone process exposing dynamic schemas (e.g., `read_file`, `write_file`).
+- *Discovery & Transports:* client discovers tools dynamically at startup via a handshake; communicates via local processes (_Stdio_) or remote hosts (_Streamable HTTP_).
+#v(0.25em)
+- _In LangChain4j:_ integrate `langchain4j-mcp` to connect with a rich ecosystem of community servers.
+- We will not cover MCP, but conceptually it just a simple way to decouple the model's tool-calling interface from the actual implementation of tools.
 #divider(
   [Part III · Memory],
   [Memory turns interaction into continuity.],
@@ -372,74 +381,154 @@ trait MathAgent:
 
 == Memory in Agentic AI Systems
 
-- #keyline[Memory matters because the current prompt is rarely enough.]
 #v(0.25em)
 #definition-line[
-  *Memory* is the mechanism by which an agent stores, retrieves, and reuses information across reasoning steps or across interactions.
+  _Memory_ is the mechanism by which an agent #underline[stores], #underline[retrieves], and #underline[reuses]
+   information across reasoning steps or across interactions.
 ]
-- Memory supports continuity, personalization, planning, and retrieval of prior knowledge.
-- A useful distinction is between *short-term memory*, *working memory*, and *long-term memory*.
-#v(0.25em)
-- _Editorial hint:_ TODO taxonomy figure for the main types of memory.
 
-== Short-Term Memory: Conversation History
+- _History vs. Memory_ (Memory $!=$ History):
+  - #underline[History:] a raw, passive, chronological transcript of what happened.
+  - #underline[Memory:] an active, curated subset injected into the context to shape the reasoning process.
 
-- #keyline[Conversation history is useful only when it remains selective.]
-#v(0.25em)
-- *Purpose:* preserve recent context across turns.
-- *Typical content:* user goals, previous answers, prior tool outputs, and unresolved constraints.
-- *Benefit:* the model interprets the current turn in light of recent interaction.
-- *Failure mode:* blindly storing the full transcript often adds noise rather than clarity.
-#v(0.25em)
-- #underline[Rule:] short-term memory should be selective, because irrelevant context consumes tokens and can confuse the model.
+- _The four core pillars of memory:_
+  - #underline[Continuity:] maintaining conversation context across turns and steps.
+  - #underline[Personalization:] remembering user preferences, instructions, and settings.
+  - #underline[Planning:] tracking current task state, subgoals, and execution progress.
+  - #underline[Retrieval:] contextually injecting relevant prior or external knowledge.
 
-== Working Memory: Intermediate State
+- #highlight[Takeaway:] memory is not a passive storage mechanism; it is an active part of the reasoning process that shapes how the model interprets the current context and what information it has available to draw upon.
+== Types of Memory: Short vs. Long-Term
 
-- #keyline[Working memory supports the task in progress, not the whole user relationship.]
+- #keyline[Memory is not monolithic; it serves different purposes and has different lifecycles.]
 #v(0.25em)
-- *Purpose:* hold temporary artifacts needed during the current task.
-- *Examples:* a plan, extracted entities, partial computations, or pending subtasks.
-- *Role:* separate durable knowledge from intermediate reasoning state.
-- *Risk:* stale intermediate state can mislead later steps if it is not updated or discarded carefully.
+
+- _Short-Term Memory_ (Working / Conversation State):
+  - #underline[Scope:] limited to the current #underline[conversation] or active task.
+  - #underline[Mechanism:] injected directly into the model's context window.
+  - #underline[Purpose:] maintains immediate execution state, goals, and recent turns.
+  - #underline[Lifecycle:] volatile; discarded or archived when the session ends.
+
+- _Long-Term Memory_ (Persistent Knowledge):
+  - #underline[Scope:] extends across multiple conversations and user interactions.
+  - #underline[Mechanism:] stored in external databases/vector stores and retrieved dynamically.
+  - #underline[Purpose:] remembers user preferences, historical patterns, and system instructions.
+  - #underline[Lifecycle:] durable; persists indefinitely and is continuously updated.
+
+== Short-Term Memory - LangChain4j Examples
+
+- #keyline[The primary abstraction for managing short-term context is `ChatMemory`.]
 #v(0.25em)
-- #highlight[Design issue:] working memory must be actively maintained, not merely accumulated.
+- _Memory Policies:_ You can customize `ChatMemory` in several ways to fit context limits:
+  - #underline[Eviction:] selectively dropping specific message types (e.g., redundant tool outputs).
+  - #underline[Compression:] summarizing older turns to preserve context while saving tokens.
+  - #underline[Filtering:] removing irrelevant or outdated intermediate reasoning steps.
+
+```scala
+// Configure a sliding window of the last 10 messages
+val chatMemory: ChatMemory = MessageWindowChatMemory.withMaxMessages(10);
+```
+
+- _Multi-User Isolation via `@MemoryId`:_
+  - For concurrent users, memory must be isolated per session.
+  - LangChain4j routes user interactions dynamically to their respective `ChatMemory`:
+
+```scala
+trait Assistant {
+  def chat(@MemoryId UUID sessionId, @UserMessage message: String): String
+}
+val assistant = AiServices.builder(Assistant.class)
+  .chatModel(model)
+  .chatMemoryProvider(sessionId -> MessageWindowChatMemory.withMaxMessages(10))
+  .build();
+```
+
 
 == Long-Term Memory: Knowledge Base
 
 - #keyline[Long-term memory is valuable only if retrieval is timely and relevant.]
 #v(0.25em)
-- *Purpose:* preserve information beyond the current conversation.
-- *Implementations:* document collections, vector stores, databases, or symbolic knowledge bases.
-- *Access principle:* long-term memory becomes useful only when the system can *retrieve* relevant items at the right moment.
-- *Quality factors:* freshness, provenance, indexing quality, and access policy.
-#v(0.25em)
-- #underline[Key distinction:] storage alone is not enough; effective memory requires retrieval and context injection.
-- _Editorial hint:_ TODO retrieval pipeline diagram from query to retrieved context.
+- *Purpose:* preserve information beyond the current conversation (e.g., document collections, databases).
+- *Mechanism:* (Typicalli) implemented via #underline[Retrieval-Augmented Generation (RAG)].
+  - _Retrieve:_ match the user's query against an external store (like a vector database).
+  - _Augment:_ select the most relevant chunks and inject them into the context window.
+  - _Generate:_ allow the model to reason and answer using this newly injected knowledge.
+- *Quality factors:* freshness of information, provenance (sources), and retrieval relevance.
+#align(center)[
+  #image("figures/rag.png", width: 40%)
+]
+== RAG in Practice: Ingestion vs. Retrieval
 
-== Memory Pipeline in Practice
-
-- #keyline[The pipeline matters more than the storage technology alone.]
+- #keyline[RAG is split into two distinct stages: offline indexing and online retrieval.]
 #v(0.25em)
-- *Store:* decide what information deserves persistence.
-- *Index:* organize stored content for efficient retrieval.
-- *Retrieve:* select the subset relevant to the current goal.
-- *Inject:* add retrieved context to the model input in a usable form.
-- *Evaluate:* measure whether memory improved performance or simply added noise.
-
-== LangChain4j: Conceptual Memory Flow
-
-- #keyline[The model does not query storage directly; the application mediates memory access.]
+- *Indexing (offline):* pre-processes domain documents.
+  - Documents are cleaned, parsed, and split into smaller segments (chunking).
+  - Each segment is converted into a vector and stored in an embedding database.
+- *Retrieval (online):* runs dynamically when a user submits a query.
+  - The query is embedded using the same vector representation model.
+  - The vector store returns semantically similar document segments.
+  - Relevant segments are injected directly into the LLM prompt context.
 #v(0.25em)
-- *Conversation side:* the framework can help maintain recent interaction state.
-- *Retrieval side:* it can also mediate access to external knowledge sources.
-- *Policy side:* the application still decides what is stored, what is retrieved, and when memory is injected.
-- *Reasoning side:* the model reasons over the *provided context*, not over the storage backend directly.
+- #underline[Takeaway:] Indexing is a background prep step, while retrieval is a real-time interaction.
+
+== LangChain4j: Easy RAG - Ingestion
+
+- #keyline[The ingestion stage parses, chunks, and vectorizes documents into a store.]
 #v(0.25em)
-- #highlight[Takeaway:] memory is an orchestration policy as much as it is a storage mechanism.
-- _Editorial hint:_ TODO comparison figure of conversation memory versus retrieval-based memory.
+- *Process:*
+  - Load documents from a directory using `FileSystemDocumentLoader`.
+  - Instantiate a lightweight vector store (e.g., in-memory or external).
+  - Use `EmbeddingStoreIngestor` to automatically handle segment splitting, embedding generation, and database storage.
+
+```scala
+// Load all text files from a folder
+val docs = FileSystemDocumentLoader.loadDocuments("/docs")
+
+// Initialize an in-memory vector store
+val store = new InMemoryEmbeddingStore[TextSegment]()
+
+val embeddingModel = ...
+val ingestResult = EmbeddingStoreIngestor.builder()
+  .embeddingModel(embeddingModel)
+  .embeddingStore(store)
+  .build()
+  .ingest(docs)
+
+```
+
+== LangChain4j: Easy RAG - Retrieval
+
+- #keyline[The retrieval stage dynamically queries the store and answers via AI Services.]
+#v(0.25em)
+- *Process:*
+  - Configure an `EmbeddingStoreContentRetriever` to link the model with the store.
+  - Bind the retriever to the declarative `AiServices` builder.
+  - Call the service: relevant context is retrieved and injected automatically.
+
+```scala
+// Create a retriever linked to our database
+val retriever = EmbeddingStoreContentRetriever.builder()
+  .embeddingStore(store)
+  .embeddingModel(embeddingModel) // Default mini model
+  .maxResults(3) // Retrieve top 3 relevant chunks
+  .build()
+
+// Bind the retriever to the AI Service
+val assistant = AiServices.builder(classOf[Assistant])
+  .chatModel(model)
+  .contentRetriever(retriever)
+  .build()
+
+val answer = assistant.chat("How does our system work?")
+```
+#divider(
+  [Part V · Agents],
+  [Combine tools and memory to build agentic systems.],
+  subtitle: [Goal decomposition, planning, tool integration, and stateful reasoning loops.],
+)
 
 #divider(
-  [Part IV · Verification],
+  [Part VI · Verification],
   [Power without verification is not engineering.],
   subtitle: [Evaluate both the final answer and the trajectory that produced it.],
 )
