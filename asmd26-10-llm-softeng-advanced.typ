@@ -527,6 +527,142 @@ val answer = assistant.chat("How does our system work?")
   subtitle: [Goal decomposition, planning, tool integration, and stateful reasoning loops.],
 )
 
+== Workflows vs. Pure Agents
+
+- #keyline[Anthropic's taxonomy] groups agentic system architectures into two main paradigms:
+#v(0.25em)
+- *Workflows:* Orchestration of LLMs and tools via #underline[deterministic, hardcoded paths]
+  - _Structure:_ Sequences, loops, parallel execution, and conditional branches
+  - _Trade-offs:_ Extremely predictable, highly reliable, easy to test, but rigid
+- *Pure Agents:* The LLM acts as an autonomous #underline[reasoning core and planner]
+  - _Structure:_ The agent dynamically decides which tool or subagent to call next based on state
+  - _Trade-offs:_ High flexibility, extremely adaptive, handles unexpected edge cases, but harder to predict and verify
+#v(0.25em)
+- #highlight[Practical perspective:] start with workflows, introduce pure agency only for high-complexity, unstructured decisions
+
+== LangChain4j Agents: Core Primitives
+
+- #keyline[The `@Agent` annotation] is the declarative building block for agentic systems:
+#v(0.25em)
+- In LangChain4j, an agent is defined as an interface (similar to an AI Service)
+- Subagents can write results to a #underline[shared state] and read input from previous steps
+
+```scala
+// Define a specialized agent interface in Scala 3
+trait CreativeWriter:
+  @UserMessage(Array("""
+    You are a creative writer.
+    Generate a story about the topic: {{topic}}.
+  """))
+  @Agent("Generates a story based on a given topic")
+  def generateStory(@V("topic") topic: String): String
+```
+
+- `@V` maps input parameters to variables in the shared state
+- Compilation with `-parameters` allows omitting `@V` (automatically inferred)
+
+== The `AgenticScope`: Shared State
+
+#definition-line[
+  An #underline[AgenticScope] is a stateful blackboard containing data shared among the subagents participating in an agentic system
+]
+#v(0.35em)
+- _Shared Blackboard:_ Agents read required inputs from the scope and write results back using `outputKey`
+- _Automatic Registry:_ Automatically logs the exact sequence of agent invocations and their raw outputs
+- _Persistence & Recovery:_ The scope can be serialized, persisted, and reloaded to recover a multi-turn process from failure
+#v(0.25em)
+- #highlight[In practice:] the scope decouples agent execution from orchestration routing
+
+== Deterministic Workflows: Sequential & Loops
+
+- #keyline[Sequential Workflow:] Execute subagents one after another:
+
+```scala
+val creativeWriter = AgenticServices.agentBuilder(classOf[CreativeWriter])
+  .chatModel(model).outputKey("story").build()
+
+val audienceEditor = AgenticServices.agentBuilder(classOf[AudienceEditor])
+  .chatModel(model).outputKey("editedStory").build()
+
+// Combine into a sequence
+val novelCreator = AgenticServices.sequenceBuilder()
+  .subAgents(creativeWriter, audienceEditor)
+  .outputKey("editedStory").build()
+```
+
+- #keyline[Loop Workflow:] Iteratively refine output until a condition is met:
+
+```scala
+val styleReviewLoop = AgenticServices.loopBuilder()
+  .subAgents(styleScorer, styleEditor)
+  .maxIterations(5)
+  .exitCondition(scope => scope.readState("score", 0.0) >= 0.8)
+  .build()
+```
+
+== Workflows: Parallel, Mappers, and Branches
+
+- #keyline[Parallel Workflow:] Run independent agents concurrently:
+
+```scala
+val eveningPlanner = AgenticServices.parallelBuilder()
+  .subAgents(foodExpert, movieExpert)
+  .executor(Executors.newFixedThreadPool(2))
+  .output(scope => combinePlans(scope.readState("movies"), scope.readState("meals")))
+  .build()
+```
+
+- #keyline[Parallel Mapper:] Run the *same* agent concurrently across a collection:
+  - _Note:_ For concurrent safety, subagents in parallel mappers cannot have `ChatMemory`
+- #keyline[Conditional Branching:] Execute different agents based on scope state:
+
+```scala
+val routerAgent = AgenticServices.conditionalBuilder()
+  .subAgents(scope => scope.readState("category") == "MEDICAL", medicalExpert)
+  .subAgents(scope => scope.readState("category") == "LEGAL", legalExpert)
+  .build()
+```
+
+== Pure Agentic AI: The Supervisor Pattern
+
+- #keyline[A Supervisor Agent] uses an LLM planner to orchestrate subagents dynamically:
+#v(0.25em)
+- Instead of rigid routes, the supervisor determines the next agent to invoke based on #underline[context]
+- It communicates via structured `AgentInvocation` requests and observes outcomes in a loop
+#v(0.25em)
+
+```scala
+val bankSupervisor = AgenticServices.supervisorBuilder()
+  .chatModel(plannerModel)
+  .subAgents(withdrawAgent, creditAgent, exchangeAgent)
+  .responseStrategy(SupervisorResponseStrategy.SUMMARY)
+  .build()
+
+// Supervisor creates a plan, calls agents, and terminates when finished
+bankSupervisor.invoke("Transfer 100 EUR from Mario to Georgios")
+```
+
+== Supervisor Customization & Policies
+
+- #keyline[Response Strategy:] Choose how the final result is determined:
+  - `LAST`: Returns the response of the last executed subagent (default)
+  - `SUMMARY`: Returns the supervisor's transactional summary of operations
+  - `SCORED`: Uses an LLM scorer to choose the best response between the two
+
+- #keyline[Context Policies:] Guide the supervisor's planning with rules or preferences:
+
+```scala
+// Provide policies via builder or dynamically at invocation time
+val supervisor = AgenticServices.supervisorBuilder()
+  .chatModel(plannerModel)
+  .supervisorContext("Policies: Prefer internal tools, currency is USD")
+  .subAgents(withdrawAgent, creditAgent)
+  .build()
+```
+
+- Overriding can be done per-invocation by passing `supervisorContext` as an argument
+
+
 #divider(
   [Part VI · Verification],
   [Power without verification is not engineering.],
@@ -535,51 +671,136 @@ val answer = assistant.chat("How does our system work?")
 
 == Why Verify Agentic AI Systems?
 
-- #keyline[More capability means more observable failure modes.]
+- #keyline[Agent loops are multi-step, stateful, and non-deterministic.]
 #v(0.25em)
-- Agentic systems are more powerful than single-shot chat systems, but they also introduce more places where behavior can fail.
-- Errors can arise in reasoning, tool choice, argument construction, execution, retrieval, or final answer synthesis.
-- Therefore, inspecting only the final answer is often insufficient.
+- _The failure of traditional assertions:_
+  - Unit testing assumes deterministic, reproducible state-to-state mappings.
+  - Models behave as black-boxes with probabilistic, high-entropy output spaces.
+  - Small changes in prompts or model weights can cause catastrophic, silent regressions.
+- _State space complexity:_
+  - Dialogue histories and intermediate tool responses create an #underline[infinite state space].
+  - An agent can traverse many #underline[different trajectories] to produce the same final answer, or vice versa.
+- _Error propagation (Cascading Failures):_
+  - A minor reasoning or tool-call error in step $i$ propagates and amplifies through subsequent steps.
+#v(0.15em)
+- #highlight[Takeaway:] we must evaluate the #underline[entire trace] of the interaction, not just the final output.
+
+== The 3-Stage Evaluation Loop
+
+- #keyline[Evaluations should run continuously at different granularities and speeds:]
 #v(0.25em)
-- #highlight[Verification target:] we must evaluate both the *outcome* and the *trajectory* that produced it.
+- _Level 1: Unit Tests & Assertions_ (Deterministic Filter)
+  - Programmatic, zero-LLM checks run on every code change (CI/CD pipeline).
+  - Ensures compliance with JSON schemas, regex constraints, and system-level latency bounds.
 
-== What Must Be Verified?
+- _Level 2: Model & Human-in-the-Loop_ (Semantic Validation)
+  - Evaluation of semantic correctness and multi-step reasoning against a curated #underline[Golden Dataset].
+  - Uses domain-specific LLM-as-a-Judge systems calibrated by human expert feedback.
 
-- #keyline[Verification spans the full interaction trace.]
+- _Level 3: Production Telemetry & Monitoring_ (Statistical Safety)
+  - Real-world validation via continuous tracking of live user interactions.
+  - Monitors implicit feedback, tool exception rates, model drift, and semantic divergence.
+
+== Level 1: Functional Correctness via pass\@k
+
+- #keyline[Estimating performance under non-deterministic generation:]
 #v(0.25em)
-- *Before execution:* did the agent choose the right tool and construct valid arguments?
-- *During execution:* did the tool run successfully and return interpretable results?
-- *Across context:* was relevant memory retrieved without contamination or omission?
-- *After execution:* is the final answer correct, grounded, complete, and aligned with constraints?
+- _The Metric:_ fraction of problems solved when generating $k$ candidate solutions. A problem is considered solved if #underline[at least one] sample passes verification.
+- _The Unbiased Estimator:_ rather than drawing $k$ samples directly (high variance), we generate $n$ samples ($n >= k$), count successful candidates $c$ passing verification, and use:
+  $ "pass@k" = E [1 - (binom(n-c, k)) / (binom(n, k))] = 1 - (binom(n-c, k)) / (binom(n, k)) $
+- _Generalization to LLM-as-a-Judge (next):_
+  - Not restricted to code unit tests.
+  - We can use an #underline[LLM-as-a-Judge] as the automated validator to compute pass\@k on semantic or free-text generation, measuring how often at least one of the $k$ generated runs is approved by the judge.
+- _The Temperature Trade-off:_
+  - For #underline[pass\@1], use #underline[low temperature] (0.0 to 0.2) to minimize bad paths.
+  - For high $k$ (e.g., #underline[pass\@10]), use #underline[high temperature] (0.7+) to maximize sample diversity, increasing the probability that at least one candidate passes.
 
-== How Can We Verify It?
+== Level 2: Curation of a "Golden Dataset"
 
-- #keyline[No single evaluation method is sufficient.]
-#v(0.25em)
-- *Component-level checks:* unit tests can validate tool wrappers, schemas, and error handling.
-- *Task-level checks:* scenario-based tests can evaluate multi-step behavior on representative tasks.
-- *Quantitative monitoring:* metrics can track success rate, grounding quality, tool-call accuracy, latency, and cost.
-- *Judgment and governance:* human review remains important for ambiguous, high-stakes, or safety-critical cases.
-#v(0.25em)
-- #underline[Best practice:] combine automated evaluation with targeted human inspection.
-- _Editorial hint:_ TODO verification matrix matching failure modes to evaluation methods.
-
-== Final Perspective
-
-- #keyline[The engineering problem is to make capability inspectable and dependable.]
-#v(0.25em)
-- Agentic AI is a problem of *system design*, not only of model capability.
-- *Tools* provide action, *memory* provides continuity, and *verification* provides trust.
-- Frameworks such as _LangChain4j_ help implement these loops, but the engineering choices still determine reliability.
-#v(0.25em)
-- #highlight[Final takeaway:] robust agentic systems are built through explicit architectures, explicit interfaces, and explicit evaluation.
-
-#focus-slide(align: left + horizon)[
-  #kicker[Final takeaway]
-  #v(0.55em)
-  #text(size: 1.38em, weight: "medium")[Build agentic AI as an explicit system.]
-  #v(0.75em)
-  #text(size: 0.82em, fill: rgb("#d7e6ef"))[
-    *Tools* provide action. *Memory* provides continuity. *Verification* provides trust.
-  ]
+#definition-line[
+  A *Golden Dataset* is a highly curated, diverse dataset of 20-100 high-value test cases reviewed and validated by domain experts to represent the system's operational envelope
 ]
+#v(0.25em)
+- #keyline[Start with high density of concepts rather than large volume of noisy data:]
+- _Dimensional coverage (Subspace testing):_
+  - _Core Capabilities:_ explicit tests for tool calling, reasoning, and routing.
+  - _User Diversity:_ variations in user skill levels, writing style, and formatting.
+  - _Edge Scenarios:_ adversarial queries, out-of-distribution inputs, and system prompt attacks.
+- _Continuous Curation Cycle:_ the dataset is a living asset. As new failure modes are uncovered in production (Level 3), they are distilled and backported into the Golden Dataset.
+
+== Level 2: Critique Shadowing with Domain Experts
+
+- #keyline[How to establish an evaluation baseline with high inter-annotator agreement:]
+#v(0.2em)
+- _The Likert Scale Fallacy:_
+  - 1-5 numerical ratings suffer from extreme cognitive bias and low #underline[Cohen's Kappa] (agreement rates).
+  - Different experts interpret a "3" or a "4" differently, introducing massive noise.
+- _Binary Judgments:_ experts are asked only: _"Is this output ready for production?"_
+- _Critique Capturing:_ if the expert flags a failure, they #underline[must] write a concise, one-sentence critique explaining the specific reason (e.g., _"Over-promised refund without checking order state"_).
+#v(0.15em)
+- #highlight[The Golden Rule:] human-written critiques provide the precise, qualitative instructions and few-shot examples needed to align your automated LLM judge.
+
+== Level 2: Building an LLM-as-a-Judge System
+
+- #keyline[Calibrating a domain-specific model judge to match human expert standards:]
+#v(0.2em)
+- _Critique-First Prompting:_
+  - Asking an LLM for a binary verdict directly leads to high false-positive rates.
+  - We force the model to write the #underline[critique first] (Chain of Thought reasoning), and only then output the final #underline[verdict] (PASS/FAIL).
+- _Few-Shot Real Alignment:_ inject actual human-annotated critiques and verdicts directly into the system prompt to calibrate the judge's boundary conditions.
+- _Human-to-Model Agreement KPI:_ run the judge on the Golden Dataset, measure agreement, and perform systematic error analysis to reconcile gaps.
+- _Deconstruction of Complex Rubrics:_ break down general evaluations into a cascade of independent, specialized, binary judges (e.g., Tone, Accuracy, Policy Compliance).
+
+== Level 2: RAG Evaluation - The RAGAs Triad
+
+- #keyline[Isolating retrieval failures from generation failures via three specialized metrics:]
+
+#align(center)[
+  #image("figures/rag.png", width: 30%)
+]
+#v(-0.35em)
+- _Faithfulness (Groundedness):_ measures if the generated claims are supported #underline[only] by the retrieved context. Prevents generator hallucination. (Answer vs. Context).
+- _Answer Relevance:_ measures if the generated answer directly resolves the user query without omitting key requests or adding irrelevant fluff. (Answer vs. Query).
+- _Context Recall & Precision:_
+  - _Context Recall:_ percentage of ground-truth facts successfully retrieved. Measures if the retriever missed critical information. (Context vs. Ground Truth).
+  - _Context Precision:_ signal-to-noise ratio of retrieved chunks. Measures if the retriever fetched irrelevant context that wastes model tokens. (Context vs. Query).
+
+== Verifying the Trajectory: Tool Calls
+
+- #keyline[In multi-step agents, the path taken is as important as the final answer:]
+#v(0.25em)
+- _Tool Selection Accuracy:_ evaluated via classification metrics (Precision, Recall, F1-Score) comparing expected tools against actual agent tool-call traces.
+- _Argument Boundary Checking:_ validates that arguments emitted by the model fall within safe, expected ranges and schemas (preventing SQL/command injection).
+- _Observation Grounding:_ measures if the agent's next reasoning step is logically coherent with the tool's output, or if it ignores facts/hallucinates past them.
+- _Exception Recovery (Self-Correction):_ injects simulated tool exceptions (e.g., API timeouts, rate limits) to verify if the agent's planner gracefully recovers, falls back to other tools, or reports failure cleanly.
+#v(0.15em)
+- #highlight[Remember:] a correct answer reached through an inefficient or unsafe tool loop is still an engineering failure.
+
+== Level 3: Monitoring & Production Observability
+
+- #keyline[Production systems require deep visibility into live reasoning traces:]
+#v(0.25em)
+- _Trace Instrumentation (OpenTelemetry):_
+  - Spans must capture the #underline[hierarchical, nested] nature of agent loops.
+  - Captures: User Query $arrow$ Planning Node $arrow$ Sub-Agent Spawn $arrow$ Tool Execution $arrow$ Observation $arrow$ Final Generation.
+- _LangChain4j ChatModelListener Primitive:_
+  - Collects low-level execution context (raw prompt, system instructions, response tokens, cost, temperature) and aggregates performance KPIs.
+- _Production Telemetry Analysis:_
+  - Monitors tool exception rates (to catch API breaking changes).
+  - Identifies semantic drift by comparing incoming queries against the Golden Set.
+  - Flags high-latency traces and poor feedback (thumbs down) for manual review.
+
+== Conclusions
+
+- #keyline[Synthesizing the core engineering principles from all sections of this course:]
+#v(0.25em)
+- _1. Design for System Alignment:_
+  - Build with strict boundaries. Ensure that #underline[tools], #underline[memory], and #underline[orchestration] are systematically aligned with a single, clear objective.
+- _2. Test the Trajectory, Not Just the Destination:_
+  - Traditional end-state assertion is insufficient. We must evaluate the #underline[entire execution trace] of intermediate thoughts and tool interactions.
+- _3. Treat Datasets and Judges as Code:_
+  - Keep a living, high-density #underline[Golden Dataset] calibrated by human expert binary critiques.
+  - Align automated #underline[LLM judges] with these human critiques via critique-first prompting.
+- _4. Connect Development to Production:_
+  - Run continuous evals (Level 1 & 2) in CI/CD, and link them to Level 3 #underline[production telemetry].
+  - Capture nested traces, monitor semantic drift, and backport live failure cases to your test sets.
