@@ -53,13 +53,13 @@
   ),
 )
 
-#set text(font: "Source Sans Pro", weight: "regular", size: 20pt)
+#set text(font: "Roboto", weight: "regular", size: 20pt)
 #show math.equation: set text(font: "Fira Math")
 #show strong: set text(fill: rgb("#005587"))
 #show emph: set text(style: "italic", fill: rgb("#00a3e0"))
 #set underline(stroke: 1.5pt + rgb("#005587"), offset: 2pt)
-#let highlight(body) = box(
-  fill: rgb("#fff1a8"),
+#let highlight(body, fill: rgb("#fff1a8")) = box(
+  fill: fill,
   inset: (x: 0.14em, y: 0.06em),
   radius: 0.12em,
 )[#body]
@@ -73,7 +73,13 @@
   #emph[#text(size: 1.02em, fill: rgb("#23373b"))[#body]]
 ]
 #let kicker(body) = text(size: 0.72em, fill: rgb("#8fd3ff"))[#body]
-#let keyline(body) = highlight[#text(size: 0.96em, fill: rgb("#23373b"))[#body]]
+// Keyline highlights: use to draw attention to central ideas.
+// - keyline: (Yellow) Core takeaways, critical definitions, and central concepts.
+// - keyline-blue: (Blue) Technical frameworks, architectural concepts, and system definitions.
+// - keyline-green: (Green) Practical tips, successful patterns, and actionable steps.
+#let keyline(body, fill: rgb("#fff1a8")) = highlight(fill: fill)[#text(size: 0.96em, fill: rgb("#23373b"))[#body]]
+#let keyline-blue(body) = keyline(body, fill: rgb("#d9e8f5"))
+#let keyline-green(body) = keyline(body, fill: rgb("#e2f0d9"))
 #let divider(label, title, subtitle: none) = focus-slide(align: left + horizon)[
   #kicker(label)
   #v(0.55em)
@@ -105,7 +111,7 @@
 
 == Today's Lesson: Agentic AI with LLMs
 
-- #highlight[*Guiding question*:] how can a language model _perceive_, _decide_, _act_, _remember_, and remain _verifiable_?
+- *Guiding question*: how can a language model _perceive_, _decide_, _act_, _remember_, and remain _verifiable_?
 - #underline[What you should leave with]
   - A precise definition of *agentic AI* and its core properties
   - A system view of how *tools* turn language into action
@@ -148,7 +154,7 @@
   ]
   
 #v(0.25em)
-- #underline[Key point:] agency is defined by the full #keyline[perception-action loop], not by intelligence alone
+- #underline[Key point:] agency is defined by the full #keyline-blue[perception-action loop], not by intelligence alone
 
 #align(center)[
   #image("figures/reasoning-cycle.png", width: 50%)
@@ -184,7 +190,7 @@
 
 == LangChain4j: AI Services
 
-- #keyline[AI Services are the first high-level abstraction above raw chat interactions]
+- #keyline-blue[AI Services are the first high-level abstraction above raw chat interactions]
 #v(0.25em)
 #definition-line[
   An _AI Service_ is a declarative Java interface whose methods are implemented by an LLM-backed runtime
@@ -259,7 +265,7 @@ def testSentimentAnalyzer(): Unit =
 
 == A Tool Is a Contract
 
-- #keyline[Tool quality depends partly on prompt design and partly on interface design.]
+- #keyline-green[Tool quality depends partly on prompt design and partly on interface design.]
 #v(0.25em)
 - A good tool specification acts as a contract between the #underline[model] and the #underline[execution] layer.
 - *Name:* tells the model which capability #underline[exists]
@@ -285,7 +291,7 @@ class Calculator:
 
 - This simple calculator exposes four operations as callable tools
 - The `@Tool` annotation prepare the method for invocation by the model, including schema generation and execution handling
-- An `AIService` can include this `Calculator` as a #keyline[capability]:
+- An `AIService` can include this `Calculator` as a #keyline-blue[capability]:
 ```scala
 trait MathAgent:
   @UserMessage(Array("I need to perform this calculation: {{expression}}"))
@@ -298,7 +304,7 @@ trait MathAgent:
 ```
 
 == Tool Description in LangChain4j
-- #keyline[Annotations are used to generate the tool's JSON schema.]
+- #keyline-blue[Annotations are used to generate the tool's JSON schema.]
 - The `@Tool` annotation provides the name and purpose.
 - `@P` (or `@Parameter`) annotations describe the arguments.
 - The framework then generates a structured schema for the LLM:
@@ -327,7 +333,7 @@ trait MathAgent:
 
 == From Text Generation to Action
 - How does the model's language output become an actual operation in the world?
-- #keyline[The orchestration layer converts #underline[language] into execution and execution back into #underline[context]]
+- #keyline-blue[The orchestration layer converts #underline[language] into execution and execution back into #underline[context]]
 #v(0.25em)
 - A agentic system needs a #underline[software layer] that can:
   - describe #underline[available tools] to the model,
@@ -341,7 +347,7 @@ trait MathAgent:
 
 == Modern Tool Use: Zero-Shot to Native ReAct
 
-- #keyline[Core loop:] task -> action request -> execution -> observation -> continuation.
+- #keyline-blue[Core loop:] task -> action request -> execution -> observation -> continuation.
 #v(0.25em)
 - *Historical baseline:* zero-shot tool use described tools directly in the prompt and asked the model to emit a textual pseudo-command.
   - The prompt had to specify tool names, descriptions, call format, and the user task.
@@ -417,7 +423,7 @@ trait MathAgent:
 
 == Short-Term Memory - LangChain4j Examples
 
-- #keyline[The primary abstraction for managing short-term context is `ChatMemory`.]
+- #keyline-blue[The primary abstraction for managing short-term context is `ChatMemory`.]
 #v(0.25em)
 - _Memory Policies:_ You can customize `ChatMemory` in several ways to fit context limits:
   - #underline[Eviction:] selectively dropping specific message types (e.g., redundant tool outputs).
@@ -459,7 +465,7 @@ val assistant = AiServices.builder(Assistant.class)
 ]
 == RAG in Practice: Ingestion vs. Retrieval
 
-- #keyline[RAG is split into two distinct stages: offline indexing and online retrieval.]
+- #keyline-blue[RAG is split into two distinct stages: offline indexing and online retrieval.]
 #v(0.25em)
 - *Indexing (offline):* pre-processes domain documents.
   - Documents are cleaned, parsed, and split into smaller segments (chunking).
@@ -473,7 +479,7 @@ val assistant = AiServices.builder(Assistant.class)
 
 == LangChain4j: Easy RAG - Ingestion
 
-- #keyline[The ingestion stage parses, chunks, and vectorizes documents into a store.]
+- #keyline-green[The ingestion stage parses, chunks, and vectorizes documents into a store.]
 #v(0.25em)
 - *Process:*
   - Load documents from a directory using `FileSystemDocumentLoader`.
@@ -498,7 +504,7 @@ val ingestResult = EmbeddingStoreIngestor.builder()
 
 == LangChain4j: Easy RAG - Retrieval
 
-- #keyline[The retrieval stage dynamically queries the store and answers via AI Services.]
+- #keyline-green[The retrieval stage dynamically queries the store and answers via AI Services.]
 #v(0.25em)
 - *Process:*
   - Configure an `EmbeddingStoreContentRetriever` to link the model with the store.
@@ -529,7 +535,7 @@ val answer = assistant.chat("How does our system work?")
 
 == Workflows vs. Pure Agents
 
-- #keyline[Anthropic's taxonomy] groups agentic system architectures into two main paradigms:
+- #keyline-blue[Anthropic's taxonomy] groups agentic system architectures into two main paradigms:
 #v(0.25em)
 - *Workflows:* Orchestration of LLMs and tools via #underline[deterministic, hardcoded paths]
   - _Structure:_ Sequences, loops, parallel execution, and conditional branches
@@ -542,7 +548,7 @@ val answer = assistant.chat("How does our system work?")
 
 == LangChain4j Agents: Core Primitives
 
-- #keyline[The `@Agent` annotation] is the declarative building block for agentic systems:
+- #keyline-blue[The `@Agent` annotation] is the declarative building block for agentic systems:
 #v(0.25em)
 - In LangChain4j, an agent is defined as an interface (similar to an AI Service)
 - Subagents can write results to a #underline[shared state] and read input from previous steps
@@ -575,7 +581,7 @@ trait CreativeWriter:
 
 == Deterministic Workflows: Sequential & Loops
 
-- #keyline[Sequential Workflow:] Execute subagents one after another:
+- #keyline-blue[Sequential Workflow:] Execute subagents one after another:
 
 ```scala
 val creativeWriter = AgenticServices.agentBuilder(classOf[CreativeWriter])
@@ -590,7 +596,7 @@ val novelCreator = AgenticServices.sequenceBuilder()
   .outputKey("editedStory").build()
 ```
 
-- #keyline[Loop Workflow:] Iteratively refine output until a condition is met:
+- #keyline-blue[Loop Workflow:] Iteratively refine output until a condition is met:
 
 ```scala
 val styleReviewLoop = AgenticServices.loopBuilder()
@@ -602,7 +608,7 @@ val styleReviewLoop = AgenticServices.loopBuilder()
 
 == Workflows: Parallel, Mappers, and Branches
 
-- #keyline[Parallel Workflow:] Run independent agents concurrently:
+- #keyline-blue[Parallel Workflow:] Run independent agents concurrently:
 
 ```scala
 val eveningPlanner = AgenticServices.parallelBuilder()
@@ -612,9 +618,9 @@ val eveningPlanner = AgenticServices.parallelBuilder()
   .build()
 ```
 
-- #keyline[Parallel Mapper:] Run the *same* agent concurrently across a collection:
+- #keyline-blue[Parallel Mapper:] Run the *same* agent concurrently across a collection:
   - _Note:_ For concurrent safety, subagents in parallel mappers cannot have `ChatMemory`
-- #keyline[Conditional Branching:] Execute different agents based on scope state:
+- #keyline-blue[Conditional Branching:] Execute different agents based on scope state:
 
 ```scala
 val routerAgent = AgenticServices.conditionalBuilder()
@@ -625,7 +631,7 @@ val routerAgent = AgenticServices.conditionalBuilder()
 
 == Pure Agentic AI: The Supervisor Pattern
 
-- #keyline[A Supervisor Agent] uses an LLM planner to orchestrate subagents dynamically:
+- #keyline-blue[A Supervisor Agent] uses an LLM planner to orchestrate subagents dynamically:
 #v(0.25em)
 - Instead of rigid routes, the supervisor determines the next agent to invoke based on #underline[context]
 - It communicates via structured `AgentInvocation` requests and observes outcomes in a loop
@@ -644,12 +650,12 @@ bankSupervisor.invoke("Transfer 100 EUR from Mario to Georgios")
 
 == Supervisor Customization & Policies
 
-- #keyline[Response Strategy:] Choose how the final result is determined:
+- #keyline-blue[Response Strategy:] Choose how the final result is determined:
   - `LAST`: Returns the response of the last executed subagent (default)
   - `SUMMARY`: Returns the supervisor's transactional summary of operations
   - `SCORED`: Uses an LLM scorer to choose the best response between the two
 
-- #keyline[Context Policies:] Guide the supervisor's planning with rules or preferences:
+- #keyline-blue[Context Policies:] Guide the supervisor's planning with rules or preferences:
 
 ```scala
 // Provide policies via builder or dynamically at invocation time
@@ -687,7 +693,7 @@ val supervisor = AgenticServices.supervisorBuilder()
 
 == The 3-Stage Evaluation Loop
 
-- #keyline[Evaluations should run continuously at different granularities and speeds:]
+- #keyline-green[Evaluations should run continuously at different granularities and speeds:]
 #v(0.25em)
 - _Level 1: Unit Tests & Assertions_ (Deterministic Filter)
   - Programmatic, zero-LLM checks run on every code change (CI/CD pipeline).
@@ -703,7 +709,7 @@ val supervisor = AgenticServices.supervisorBuilder()
 
 == Level 1: Functional Correctness via pass\@k
 
-- #keyline[Estimating performance under non-deterministic generation:]
+- #keyline-green[Estimating performance under non-deterministic generation:]
 #v(0.25em)
 - _The Metric:_ fraction of problems solved when generating $k$ candidate solutions. A problem is considered solved if #underline[at least one] sample passes verification.
 - _The Unbiased Estimator:_ rather than drawing $k$ samples directly (high variance), we generate $n$ samples ($n >= k$), count successful candidates $c$ passing verification, and use:
@@ -721,7 +727,7 @@ val supervisor = AgenticServices.supervisorBuilder()
   A *Golden Dataset* is a highly curated, diverse dataset of 20-100 high-value test cases reviewed and validated by domain experts to represent the system's operational envelope
 ]
 #v(0.25em)
-- #keyline[Start with high density of concepts rather than large volume of noisy data:]
+- #keyline-green[Start with high density of concepts rather than large volume of noisy data:]
 - _Dimensional coverage (Subspace testing):_
   - _Core Capabilities:_ explicit tests for tool calling, reasoning, and routing.
   - _User Diversity:_ variations in user skill levels, writing style, and formatting.
@@ -730,7 +736,7 @@ val supervisor = AgenticServices.supervisorBuilder()
 
 == Level 2: Critique Shadowing with Domain Experts
 
-- #keyline[How to establish an evaluation baseline with high inter-annotator agreement:]
+- #keyline-green[How to establish an evaluation baseline with high inter-annotator agreement:]
 #v(0.2em)
 - _The Likert Scale Fallacy:_
   - 1-5 numerical ratings suffer from extreme cognitive bias and low #underline[Cohen's Kappa] (agreement rates).
@@ -742,7 +748,7 @@ val supervisor = AgenticServices.supervisorBuilder()
 
 == Level 2: Building an LLM-as-a-Judge System
 
-- #keyline[Calibrating a domain-specific model judge to match human expert standards:]
+- #keyline-green[Calibrating a domain-specific model judge to match human expert standards:]
 #v(0.2em)
 - _Critique-First Prompting:_
   - Asking an LLM for a binary verdict directly leads to high false-positive rates.
@@ -753,7 +759,7 @@ val supervisor = AgenticServices.supervisorBuilder()
 
 == Level 2: RAG Evaluation - The RAGAs Triad
 
-- #keyline[Isolating retrieval failures from generation failures via three specialized metrics:]
+- #keyline-green[Isolating retrieval failures from generation failures via three specialized metrics:]
 
 #align(center)[
   #image("figures/rag.png", width: 30%)
@@ -792,15 +798,16 @@ val supervisor = AgenticServices.supervisorBuilder()
 
 == Conclusions
 
-- #keyline[Synthesizing the core engineering principles from all sections of this course:]
-#v(0.25em)
-- _1. Design for System Alignment:_
-  - Build with strict boundaries. Ensure that #underline[tools], #underline[memory], and #underline[orchestration] are systematically aligned with a single, clear objective.
-- _2. Test the Trajectory, Not Just the Destination:_
-  - Traditional end-state assertion is insufficient. We must evaluate the #underline[entire execution trace] of intermediate thoughts and tool interactions.
-- _3. Treat Datasets and Judges as Code:_
-  - Keep a living, high-density #underline[Golden Dataset] calibrated by human expert binary critiques.
-  - Align automated #underline[LLM judges] with these human critiques via critique-first prompting.
-- _4. Connect Development to Production:_
-  - Run continuous evals (Level 1 & 2) in CI/CD, and link them to Level 3 #underline[production telemetry].
-  - Capture nested traces, monitor semantic drift, and backport live failure cases to your test sets.
+- #keyline-blue[Evaluating multi-step reasoning] requires accounting for stochasticity, non-determinism, and complex tool trajectories.
+- In this lesson, we explored #keyline-green[practical techniques] to evaluate, build, and observe these agents in practice.
+#v(0.15em)
+- _Key Dimensions for Real-World Deployment:_
+  - _Model Versioning:_ track behavioral changes over time to establish robust LLMOps pipelines.
+  - _Advanced Observability:_ integrate trace analysis tools (e.g., LangSmith) for production visibility.
+  - _Robust Verification:_ leverage simulation environments, synthetic datasets, and adversarial testing.
+#v(0.15em)
+- _Related Frameworks & Advanced Concepts:_
+  - _LangSmith (https://smith.langchain.com/):_ industry-standard platform for tracing and evaluation.
+  - _Model Context Protocol (MCP):_ standardized open protocol to decouple models from tool-execution details.
+  - _Agent-to-Agent (A2A) Communication:_ patterns for orchestrating complex, collaborative multi-agent systems.
+
