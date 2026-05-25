@@ -150,7 +150,7 @@
 - _Action_ modifies the environment, the system state, or the available knowledge
 - _Objectives_ define the criterion by which one action is preferred over another
   #text(size: 0.9em)[
-    - In LLM-based agents, objectives are often expressed as natural-language instructions
+    - In LLM-based agents, objectives are often expressed as #keyline-green[natural-language instructions]
   ]
   
 #v(0.25em)
@@ -177,7 +177,7 @@
 
 == Building Blocks of an Agentic AI System
 
-- #keyline[An agentic system works only when model, tools, memory, and orchestration remain #underline[aligned]]
+An agentic system works only when model, tools, memory, and orchestration remain #underline[aligned]
 - _Reasoning layer_ - #underline[LLM]: interprets the goal, plans candidate actions, and synthesizes answers
 - _Action layer_ - #underline[Tools]: expose external capabilities such as search, APIs, databases, or code execution
 - _Continuity layer_ - #underline[Memory]: preserves information across steps and across interactions
@@ -233,9 +233,10 @@ def testSentimentAnalyzer(): Unit =
 == Tools: What Is a Tool?
 
 #definition-line[
-  A *tool* is a callable resource outside the model, exposed through a well-defined interface
+  A *tool* is a #keyline-green[callable] resource outside the model, exposed through a well-defined interface
 ]
-- A tool is not stored #keyline[inside] the model parameters; it is made available by the surrounding software system
+- A tool is not stored #keyline[inside] the model parameters
+  - it is made available by the #keyline-green[surrounding] software system
 #v(0.25em)
 - *Minimum contract:*
   - _name_ for identification
@@ -252,9 +253,9 @@ def testSentimentAnalyzer(): Unit =
 
 == Why Are Tools Important?
 
-- #keyline[Tools improve both epistemic quality and operational reach]
+- #keyline-green[Tools improve both epistemic quality and operational reach]
 - *Grounding:* tools can reduce hallucination by connecting answers to external information sources
-  - Before replying, the model can check facts, compute results, or query databases instead of relying solely on internal knowledge (_self-augmentation_ and _self-correction_ patterns)
+  - Before replying, the model can check facts, compute results, or query databases instead of relying solely on internal knowledge (#underline[self-augmentation] and #underline[self-correction] patterns)
 - *Capability extension:* tools enable actions that plain text generation cannot perform #underline[reliably] on its own
   - e.g., performing calculations, or manipulating structured data
 - *System interaction:* tools let the agent read from and write to *real* systems
@@ -347,7 +348,7 @@ trait MathAgent:
 
 == Modern Tool Use: Zero-Shot to Native ReAct
 
-- #keyline-blue[Core loop:] task -> action request -> execution -> observation -> continuation.
+- #keyline-blue[Core loop:] task ➡️ action request ➡️ execution ➡️ observation ➡️ continuation.
 #v(0.25em)
 - *Historical baseline:* zero-shot tool use described tools directly in the prompt and asked the model to emit a textual pseudo-command.
   - The prompt had to specify tool names, descriptions, call format, and the user task.
@@ -402,8 +403,7 @@ trait MathAgent:
   - #underline[Personalization:] remembering user preferences, instructions, and settings.
   - #underline[Planning:] tracking current task state, subgoals, and execution progress.
   - #underline[Retrieval:] contextually injecting relevant prior or external knowledge.
-
-- #highlight[Takeaway:] memory is not a passive storage mechanism; it is an active part of the reasoning process that shapes how the model interprets the current context and what information it has available to draw upon.
+  
 == Types of Memory: Short vs. Long-Term
 
 - #keyline[Memory is not monolithic; it serves different purposes and has different lifecycles.]
@@ -455,7 +455,7 @@ val assistant = AiServices.builder(Assistant.class)
 - #keyline[Long-term memory is valuable only if retrieval is timely and relevant.]
 #v(0.25em)
 - *Purpose:* preserve information beyond the current conversation (e.g., document collections, databases).
-- *Mechanism:* (Typicalli) implemented via #underline[Retrieval-Augmented Generation (RAG)].
+- *Mechanism:* (Typically) implemented via #underline[Retrieval-Augmented Generation (RAG)].
   - _Retrieve:_ match the user's query against an external store (like a vector database).
   - _Augment:_ select the most relevant chunks and inject them into the context window.
   - _Generate:_ allow the model to reason and answer using this newly injected knowledge.
@@ -467,16 +467,18 @@ val assistant = AiServices.builder(Assistant.class)
 
 - #keyline-blue[RAG is split into two distinct stages: offline indexing and online retrieval.]
 #v(0.25em)
-- *Indexing (offline):* pre-processes domain documents.
-  - Documents are cleaned, parsed, and split into smaller segments (chunking).
-  - Each segment is converted into a vector and stored in an embedding database.
-- *Retrieval (online):* runs dynamically when a user submits a query.
-  - The query is embedded using the same vector representation model.
-  - The vector store returns semantically similar document segments.
+- *Indexing* (_offline_): pre-processes domain documents.
+  - Documents are cleaned, parsed, and split into smaller segments (#keyline-green[chunking]).
+    - #text(size: 0.72em, fill: rgb("#4a5568"))[_Chunking:_ cuts long texts into cohesive segments fitting the context window.]
+  - Each segment is converted into a numeric vector (#keyline-green[embedding]) and stored.
+    - #text(size: 0.72em, fill: rgb("#4a5568"))[_Embedding:_ converts text into numeric coordinates representing semantic concepts.]
+- *Retrieval* (_online_): runs dynamically when a user submits a query.
+  - The query is vectorized using the same #underline[embedding model].
+  - A specialized #keyline-green[vector store] finds and returns semantically similar segments.
+    - #text(size: 0.72em, fill: rgb("#4a5568"))[_Vector Store:_ database optimized for high-speed semantic similarity searches.]
   - Relevant segments are injected directly into the LLM prompt context.
-#v(0.25em)
-- #underline[Takeaway:] Indexing is a background prep step, while retrieval is a real-time interaction.
-
+#v(0.15em)
+- For both stages, the choice of #underline[embedding model] (semantic depth), #underline[chunking strategy] (segment size), and #underline[vector store] (retrieval architecture) directly determines retrieval precision and relevance.
 == LangChain4j: Easy RAG - Ingestion
 
 - #keyline-green[The ingestion stage parses, chunks, and vectorizes documents into a store.]
@@ -564,8 +566,8 @@ trait CreativeWriter:
   def generateStory(@V("topic") topic: String): String
 ```
 
-- `@V` maps input parameters to variables in the shared state
-- Compilation with `-parameters` allows omitting `@V` (automatically inferred)
+- `@V` binds method parameters to prompt template variables (like `{{topic}}`)
+- Compilation with `-parameters` allows omitting `@V` (automatically inferred from parameter names)
 
 == The `AgenticScope`: Shared State
 
@@ -681,15 +683,15 @@ val supervisor = AgenticServices.supervisorBuilder()
 #v(0.25em)
 - _The failure of traditional assertions:_
   - Unit testing assumes deterministic, reproducible state-to-state mappings.
-  - Models behave as black-boxes with probabilistic, high-entropy output spaces.
-  - Small changes in prompts or model weights can cause catastrophic, silent regressions.
+  - Models behave as black-boxes with probabilistic output spaces.
+  - Small changes in prompts can cause catastrophic, silent regressions.
 - _State space complexity:_
   - Dialogue histories and intermediate tool responses create an #underline[infinite state space].
   - An agent can traverse many #underline[different trajectories] to produce the same final answer, or vice versa.
 - _Error propagation (Cascading Failures):_
   - A minor reasoning or tool-call error in step $i$ propagates and amplifies through subsequent steps.
 #v(0.15em)
-- #highlight[Takeaway:] we must evaluate the #underline[entire trace] of the interaction, not just the final output.
+$arrow.r$ we must evaluate the #underline[entire trace] of the interaction, not just the final output.
 
 == The 3-Stage Evaluation Loop
 
@@ -738,7 +740,7 @@ val supervisor = AgenticServices.supervisorBuilder()
 
 - #keyline-green[How to establish an evaluation baseline with high inter-annotator agreement:]
 #v(0.2em)
-- _The Likert Scale Fallacy:_
+- Pay attention to the evaluation interface design:
   - 1-5 numerical ratings suffer from extreme cognitive bias and low #underline[Cohen's Kappa] (agreement rates).
   - Different experts interpret a "3" or a "4" differently, introducing massive noise.
 - _Binary Judgments:_ experts are asked only: _"Is this output ready for production?"_
@@ -784,17 +786,18 @@ val supervisor = AgenticServices.supervisorBuilder()
 
 == Level 3: Monitoring & Production Observability
 
-- #keyline[Production systems require deep visibility into live reasoning traces:]
-#v(0.25em)
-- _Trace Instrumentation (OpenTelemetry):_
+- #keyline[Production systems require deep, hierarchical visibility into live reasoning traces:]
+#v(0.2em)
+- _Trace Instrumentation (OpenTelemetry-native):_
   - Spans must capture the #underline[hierarchical, nested] nature of agent loops.
-  - Captures: User Query $arrow$ Planning Node $arrow$ Sub-Agent Spawn $arrow$ Tool Execution $arrow$ Observation $arrow$ Final Generation.
-- _LangChain4j ChatModelListener Primitive:_
-  - Collects low-level execution context (raw prompt, system instructions, response tokens, cost, temperature) and aggregates performance KPIs.
+  - *Tracing Flow:* User Query $arrow$ Planning Node $arrow$ Sub-Agent Spawn $arrow$ Tool Execution $arrow$ Observation $arrow$ Generation.
+  - *Modern Tooling:* #keyline-green[LangSmith], #keyline-green[Langfuse], #keyline-green[Arize Phoenix] (via #keyline-blue[OpenLLMetry] spans).
+- _Low-Level Execution Logging (e.g., ChatModelListener):_
+  - Collects precise context (raw prompts, system instructions, token counts, cost, temperature, latency) and aggregates low-level performance KPIs.
 - _Production Telemetry Analysis:_
-  - Monitors tool exception rates (to catch API breaking changes).
-  - Identifies semantic drift by comparing incoming queries against the Golden Set.
-  - Flags high-latency traces and poor feedback (thumbs down) for manual review.
+  - *Exception Rates:* monitors tool/API errors to catch breaking changes in external systems.
+  - *Semantic Drift:* automatically flags incoming queries deviating from the evaluation Golden Set.
+  - *Trace Filtering:* surfaces high-latency traces and negative user feedback (e.g., thumbs down) for manual curation.
 
 == Conclusions
 
@@ -805,9 +808,8 @@ val supervisor = AgenticServices.supervisorBuilder()
   - _Model Versioning:_ track behavioral changes over time to establish robust LLMOps pipelines.
   - _Advanced Observability:_ integrate trace analysis tools (e.g., LangSmith) for production visibility.
   - _Robust Verification:_ leverage simulation environments, synthetic datasets, and adversarial testing.
-#v(0.15em)
 - _Related Frameworks & Advanced Concepts:_
-  - _LangSmith (https://smith.langchain.com/):_ industry-standard platform for tracing and evaluation.
-  - _Model Context Protocol (MCP):_ standardized open protocol to decouple models from tool-execution details.
-  - _Agent-to-Agent (A2A) Communication:_ patterns for orchestrating complex, collaborative multi-agent systems.
+  - #keyline-blue[LangSmith] (https://smith.langchain.com/): industry-standard platform for tracing and evaluation.
+  - #keyline-blue[Model Context Protocol (MCP)]: standardized open protocol to decouple models from tool-execution details.
+  - #keyline-blue[Agent-to-Agent (A2A) Communication]: patterns for orchestrating complex, collaborative multi-agent systems.
 
