@@ -170,7 +170,7 @@
 - _Temporality:_ decisions unfold over time rather than in a single isolated step
 #v(0.25em)
 
-- #highlight[Takeaway:] these properties distinguish agentic systems from static question-answering or single-turn chat
+
 #align(center)[
   #image("figures/single-turn-interaction.png", width: 50%)
 ]
@@ -261,7 +261,6 @@ def testSentimentAnalyzer(): Unit =
 - *System interaction:* tools let the agent read from and write to *real* systems
 - *Observability:* tool schemas make #underline[behavior] easier to inspect and evaluate
 #v(0.25em)
-- #highlight[Takeaway:] tools move the model from isolated text generation toward controlled interaction with the world
 
 
 == A Tool Is a Contract
